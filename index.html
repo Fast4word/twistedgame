@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Twisted Game</title>
+</head>
+<body>
+<button id="loginButton">Login with GitHub</button>
+<button id="saveButton" disabled>Save Progress</button>
+
+<script>
+const clientId = 'YOUR_CLIENT_ID';
+const redirectUri = 'YOUR_REDIRECT_URI';
+const scope = 'repo'; // Permission scope for accessing repositories
+
+document.getElementById('loginButton').addEventListener('click', () => {
+  window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}`;
+});
+
+document.getElementById('saveButton').addEventListener('click', async () => {
+  const accessToken = localStorage.getItem('accessToken');
+  if (!accessToken) {
+    alert('Please login with GitHub first.');
+    return;
+  }
+
+  const progressData = { progress: 'Your game progress data here' };
+  const playerName = localStorage.getItem('githubUsername');
+  const repoName = `twisted-game-progress-${playerName}`;
+  const fileContent = JSON.stringify(progressData);
+
+  const createRepoResponse = await fetch(`https://api.github.com/user/repos`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `token ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: repoName,
+      description: 'Repository for storing game progress',
+      private: true,
+    }),
+  });
+
+  if (createRepoResponse.ok) {
+    const createFileResponse = await fetch(`https://api.github.com/repos/${playerName}/${repoName}/contents/progress.json`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: 'Save game progress',
+        content: btoa(fileContent),
+      }),
+    });
+
+    if (createFileResponse.ok) {
+      alert('Game progress saved successfully!');
+    } else {
+      alert('Failed to save game progress.');
+    }
+  } else {
+    alert('Failed to create repository.');
+  }
+});
+
+// Handle redirect after GitHub login
+const urlParams = new URLSearchParams(window.location.search);
+const code = urlParams.get('code');
+if (code) {
+  fetch(`https://github.com/login/oauth/access_token`, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      client_id: clientId,
+      client_secret: 'YOUR_CLIENT_SECRET',
+      code,
+    }),
+  })
+  .then(response => response.json())
+  .then(data => {
+    const accessToken = data.access_token;
+    localStorage.setItem('accessToken', accessToken);
+
+    // Fetch the user's profile to get their username
+    fetch('https://api.github.com/user', {
+      headers: {
+        'Authorization': `token ${accessToken}`,
+      },
+    })
+    .then(response => response.json())
+    .then(userData => {
+      const githubUsername = userData.login;
+      localStorage.setItem('githubUsername', githubUsername);
+      document.getElementById('saveButton').disabled = false;
+      alert('Login successful!');
+    })
+    .catch(error => {
+      alert('Failed to fetch user profile.');
+      console.error('Error:', error);
+    });
+  })
+  .catch(error => {
+    alert('Login failed.');
+    console.error('Error:', error);
+  });
+}
+</script>
+</body>
+</html>
